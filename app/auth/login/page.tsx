@@ -3,6 +3,8 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,24 +16,42 @@ import Link from "next/link"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   })
-  const [isLoading, setIsLoading] = useState(false)
+  
+  const { signIn, signInWithGoogle } = useAuth()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
     setIsLoading(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    // Handle login logic here
+    
+    try {
+      await signIn(formData.email, formData.password)
+      router.push("/")
+    } catch (error: any) {
+      setError(error.message || "Failed to sign in")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleSocialLogin = (provider: string) => {
-    // Handle social login
-    console.log(`Login with ${provider}`)
+  const handleGoogleLogin = async () => {
+    setError("")
+    setIsLoading(true)
+    
+    try {
+      await signInWithGoogle()
+    } catch (error: any) {
+      setError(error.message || "Failed to sign in with Google")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -72,18 +92,11 @@ export default function LoginPage() {
               <Button
                 variant="outline"
                 className="w-full h-12 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-                onClick={() => handleSocialLogin("google")}
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
               >
                 <Chrome className="h-5 w-5 mr-3" />
                 Continue with Google
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full h-12 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-                onClick={() => handleSocialLogin("discord")}
-              >
-                <MessageCircle className="h-5 w-5 mr-3" />
-                Continue with Discord
               </Button>
             </div>
 
@@ -98,6 +111,12 @@ export default function LoginPage() {
 
             {/* Email Login Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-md">
+                  {error}
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-gray-700 dark:text-gray-300">
                   Email
