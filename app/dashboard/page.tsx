@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,55 +22,45 @@ import {
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { ScrollCard } from "@/components/scroll-card"
+import { useAuth } from "@/contexts/auth-context"
+import { PostService } from "@/lib/posts"
+import { DragonService } from "@/lib/dragons"
 
 export default function DashboardPage() {
+  const router = useRouter()
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("overview")
+  const [userPosts, setUserPosts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [favoriteDragons, setFavoriteDragons] = useState({
+    species: [],
+    individuals: []
+  })
 
-  // Mock user data
-  const user = {
-    id: 1,
-    username: "DragonRider47",
-    email: "rider@example.com",
-    avatar: "/placeholder.svg?height=100&width=100",
-    bio: "Passionate HTTYD fan and dragon enthusiast. Love creating theories about the Hidden World!",
-    joinDate: "March 2024",
-    role: "Member",
-    stats: {
-      posts: 23,
-      artworks: 7,
-      likes: 156,
-      comments: 89,
-      followers: 34,
-      following: 67,
-    },
-    badges: ["Theory Master", "Art Lover", "Community Helper"],
+  useEffect(() => {
+    if (!user) {
+      router.push("/auth/login")
+      return
+    }
+    
+    loadUserData()
+  }, [user, router])
+
+  const loadUserData = async () => {
+    try {
+      const [posts, favorites] = await Promise.all([
+        PostService.getPosts({ author: user?.profile?.username, userId: user?.id }),
+        DragonService.getUserFavorites(user!.id)
+      ])
+      
+      setUserPosts(posts)
+      setFavoriteDragons(favorites)
+    } catch (error) {
+      console.error("Failed to load user data:", error)
+    } finally {
+      setLoading(false)
+    }
   }
-
-  const recentPosts = [
-    {
-      id: 1,
-      title: "My theory about Toothless's true origins",
-      content: "I've been thinking about the Night Fury species and I believe...",
-      author: "DragonRider47",
-      timestamp: "2 days ago",
-      votes: 23,
-      comments: 12,
-      tags: ["Theory", "Night Fury"],
-      type: "theory" as const,
-    },
-    {
-      id: 2,
-      title: "Light Fury sketch I made today",
-      content: "Spent some time drawing the Light Fury in her natural habitat...",
-      author: "DragonRider47",
-      timestamp: "5 days ago",
-      votes: 45,
-      comments: 8,
-      tags: ["Fanart", "Light Fury"],
-      type: "art" as const,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-  ]
 
   const achievements = [
     { name: "First Post", description: "Created your first community post", earned: true },
@@ -78,6 +69,17 @@ export default function DashboardPage() {
     { name: "Community Leader", description: "Received 100 upvotes", earned: true },
   ]
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-stone-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-gray-900">
       <div className="max-w-6xl mx-auto px-4 py-8">
@@ -85,34 +87,38 @@ export default function DashboardPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             <Avatar className="w-24 h-24 border-4 border-amber-200 dark:border-amber-700">
-              <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.username} />
+              <AvatarImage src={user.profile?.avatar_url || "/placeholder.svg"} alt={user.profile?.username || "User"} />
               <AvatarFallback className="bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 text-2xl font-bold">
-                {user.username.slice(0, 2).toUpperCase()}
+                {(user.profile?.display_name || user.profile?.username || user.email).slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
 
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-stone-100 font-serif">{user.username}</h1>
-                <Badge className="bg-amber-500 text-white">{user.role}</Badge>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-stone-100 font-serif">
+                  {user.profile?.display_name || user.profile?.username || "Dragon Rider"}
+                </h1>
+                <Badge className="bg-amber-500 text-white">Member</Badge>
               </div>
-              <p className="text-gray-600 dark:text-gray-300 mb-3">{user.bio}</p>
+              <p className="text-gray-600 dark:text-gray-300 mb-3">{user.profile?.bio || "No bio yet"}</p>
               <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
-                  Joined {user.joinDate}
+                  Joined {new Date(user.profile?.created_at || Date.now()).toLocaleDateString()}
                 </div>
                 <div className="flex items-center gap-1">
                   <User className="h-4 w-4" />
-                  {user.stats.followers} followers
+                  {userPosts.length} posts
                 </div>
               </div>
             </div>
 
-            <Button className="bg-amber-500 hover:bg-amber-600 text-white">
+            <Link href="/profile">
+              <Button className="bg-amber-500 hover:bg-amber-600 text-white">
               <Settings className="h-4 w-4 mr-2" />
               Edit Profile
-            </Button>
+              </Button>
+            </Link>
           </div>
         </motion.div>
 
@@ -126,7 +132,7 @@ export default function DashboardPage() {
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-0">
             <CardContent className="p-4 text-center">
               <ScrollText className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">{user.stats.posts}</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">{userPosts.length}</div>
               <div className="text-sm text-gray-600 dark:text-gray-300">Posts</div>
             </CardContent>
           </Card>
@@ -134,26 +140,14 @@ export default function DashboardPage() {
           <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-0">
             <CardContent className="p-4 text-center">
               <Palette className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">{user.stats.artworks}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Artworks</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">
+                {favoriteDragons.species.length + favoriteDragons.individuals.length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Favorite Dragons</div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border-0">
-            <CardContent className="p-4 text-center">
-              <Heart className="h-8 w-8 text-red-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">{user.stats.likes}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Likes Received</div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-0">
-            <CardContent className="p-4 text-center">
-              <MessageSquare className="h-8 w-8 text-green-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">{user.stats.comments}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Comments</div>
-            </CardContent>
-          </Card>
+          {/* Additional stat cards can be added here */}
         </motion.div>
 
         {/* Main Content */}
@@ -181,19 +175,23 @@ export default function DashboardPage() {
                   <Card className="bg-gradient-to-br from-amber-50 to-stone-50 dark:from-gray-800 dark:to-gray-700 border-0 shadow-lg">
                     <CardHeader>
                       <CardTitle className="text-xl font-bold text-gray-900 dark:text-stone-100 font-serif">
-                        Quick Actions
+                        Create Content
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-2 gap-4">
-                        <Button className="h-16 bg-blue-500 hover:bg-blue-600 text-white flex-col">
-                          <Edit3 className="h-6 w-6 mb-1" />
-                          Create Post
-                        </Button>
-                        <Button className="h-16 bg-purple-500 hover:bg-purple-600 text-white flex-col">
-                          <Upload className="h-6 w-6 mb-1" />
-                          Upload Art
-                        </Button>
+                        <Link href="/posts/create">
+                          <Button className="h-16 w-full bg-blue-500 hover:bg-blue-600 text-white flex-col">
+                            <Edit3 className="h-6 w-6 mb-1" />
+                            Create Post
+                          </Button>
+                        </Link>
+                        <Link href="/dragons">
+                          <Button className="h-16 w-full bg-purple-500 hover:bg-purple-600 text-white flex-col">
+                            <BookOpen className="h-6 w-6 mb-1" />
+                            Explore Dragons
+                          </Button>
+                        </Link>
                       </div>
                     </CardContent>
                   </Card>
@@ -206,9 +204,28 @@ export default function DashboardPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {recentPosts.map((post) => (
-                        <ScrollCard key={post.id} post={post} />
-                      ))}
+                      {loading ? (
+                        <div className="space-y-4">
+                          {[...Array(2)].map((_, i) => (
+                            <div key={i} className="animate-pulse">
+                              <div className="bg-gray-200 dark:bg-gray-700 rounded-lg h-32"></div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : userPosts.length > 0 ? (
+                        userPosts.slice(0, 2).map((post) => (
+                          <ScrollCard key={post.id} post={post} />
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-gray-500 dark:text-gray-400">No posts yet</p>
+                          <Link href="/posts/create">
+                            <Button className="mt-4 bg-amber-500 hover:bg-amber-600 text-white">
+                              Create Your First Post
+                            </Button>
+                          </Link>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -224,14 +241,19 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
-                        {user.badges.map((badge) => (
-                          <Badge
-                            key={badge}
-                            className="w-full justify-center py-2 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                          >
-                            {badge}
+                        <Badge className="w-full justify-center py-2 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                          Dragon Enthusiast
+                        </Badge>
+                        {userPosts.length > 0 && (
+                          <Badge className="w-full justify-center py-2 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                            Content Creator
                           </Badge>
-                        ))}
+                        )}
+                        {favoriteDragons.species.length + favoriteDragons.individuals.length > 5 && (
+                          <Badge className="w-full justify-center py-2 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                            Dragon Collector
+                          </Badge>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

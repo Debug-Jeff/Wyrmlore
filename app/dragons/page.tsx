@@ -1,80 +1,116 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, BookOpen } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ChevronLeft, ChevronRight, BookOpen, Search, Filter, Heart, Star, Users } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
+import Link from "next/link"
+import { useAuth } from "@/contexts/auth-context"
+import { DragonService, DragonSpecies, DragonIndividual, DragonClass } from "@/lib/dragons"
 
 export default function DragonCodexPage() {
-  const [currentDragon, setCurrentDragon] = useState(0)
+  const { user } = useAuth()
   const [isBookOpen, setIsBookOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState("species")
+  const [species, setSpecies] = useState<DragonSpecies[]>([])
+  const [individuals, setIndividuals] = useState<DragonIndividual[]>([])
+  const [classes, setClasses] = useState<DragonClass[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedClass, setSelectedClass] = useState<string>("")
+  const [selectedRarity, setSelectedRarity] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(0)
+  const itemsPerPage = 6
 
-  const dragons = [
-    {
-      id: 1,
-      name: "Toothless",
-      species: "Night Fury",
-      class: "Strike Class",
-      rarity: "Legendary",
-      abilities: ["Plasma Blasts", "Stealth Mode", "Echolocation", "Alpha Command"],
-      stats: { firepower: 10, speed: 10, armor: 8, stealth: 10, venom: 0, jawStrength: 6 },
-      description:
-        "The last known Night Fury, Toothless is Hiccup's loyal companion and the Alpha of all dragons. His intelligence and bond with humans makes him truly unique among dragonkind.",
-      lore: "Once thought extinct, Night Furies were the most feared dragons in the archipelago. Toothless proved that with understanding and friendship, even the most dangerous dragons can become the most loyal companions.",
-      image: "/placeholder.svg?height=400&width=400",
-    },
-    {
-      id: 2,
-      name: "Light Fury",
-      species: "Light Fury",
-      class: "Strike Class",
-      rarity: "Legendary",
-      abilities: ["Plasma Blasts", "Cloaking", "Heat Camouflage", "Hypersonic Speed"],
-      stats: { firepower: 9, speed: 10, armor: 7, stealth: 10, venom: 0, jawStrength: 6 },
-      description:
-        "A close relative of the Night Fury, the Light Fury is equally elusive and powerful. Her white scales shimmer with an otherworldly beauty, and she possesses unique cloaking abilities.",
-      lore: "Light Furies are the guardians of the Hidden World, using their cloaking abilities to remain unseen by humans. They represent the wild, untamed spirit of dragonkind.",
-      image: "/placeholder.svg?height=400&width=400",
-    },
-    {
-      id: 3,
-      name: "Stormfly",
-      species: "Deadly Nadder",
-      class: "Tracker Class",
-      rarity: "Common",
-      abilities: ["Spine Shot", "Magnesium Fire", "Keen Eyesight", "Tail Spikes"],
-      stats: { firepower: 8, speed: 8, armor: 6, stealth: 4, venom: 0, jawStrength: 5 },
-      description:
-        "Astrid's faithful companion, Stormfly is a Deadly Nadder known for her precision and loyalty. Her colorful plumage and deadly accuracy make her a formidable ally.",
-      lore: "Deadly Nadders are among the most beautiful dragons, but their beauty hides a deadly arsenal. Their tail spikes can be launched with pinpoint accuracy.",
-      image: "/placeholder.svg?height=400&width=400",
-    },
-    {
-      id: 4,
-      name: "Hookfang",
-      species: "Monstrous Nightmare",
-      class: "Stoker Class",
-      rarity: "Common",
-      abilities: ["Body Ignition", "Kerosene Gel Fire", "Wing Flame", "Intimidation"],
-      stats: { firepower: 10, speed: 6, armor: 8, stealth: 2, venom: 0, jawStrength: 8 },
-      description:
-        "Snotlout's temperamental dragon, Hookfang is a Monstrous Nightmare with a fiery personality to match his flaming abilities. He can set his entire body ablaze.",
-      lore: "Monstrous Nightmares are the most aggressive of the dragon species, known for their ability to set themselves on fire and their stubborn, prideful nature.",
-      image: "/placeholder.svg?height=400&width=400",
-    },
-  ]
+  useEffect(() => {
+    loadData()
+  }, [user])
 
-  const dragon = dragons[currentDragon]
+  useEffect(() => {
+    filterData()
+  }, [searchTerm, selectedClass, selectedRarity, activeTab])
 
-  const nextDragon = () => {
-    setCurrentDragon((prev) => (prev + 1) % dragons.length)
+  const loadData = async () => {
+    try {
+      const [speciesData, individualsData, classesData] = await Promise.all([
+        DragonService.getDragonSpecies({ userId: user?.id }),
+        DragonService.getDragonIndividuals({ userId: user?.id }),
+        DragonService.getDragonClasses()
+      ])
+      
+      setSpecies(speciesData)
+      setIndividuals(individualsData)
+      setClasses(classesData)
+    } catch (error) {
+      console.error("Failed to load dragon data:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const prevDragon = () => {
-    setCurrentDragon((prev) => (prev - 1 + dragons.length) % dragons.length)
+  const filterData = async () => {
+    try {
+      if (activeTab === "species") {
+        const filtered = await DragonService.getDragonSpecies({
+          search: searchTerm,
+          classId: selectedClass,
+          rarity: selectedRarity,
+          userId: user?.id
+        })
+        setSpecies(filtered)
+      } else {
+        const filtered = await DragonService.getDragonIndividuals({
+          search: searchTerm,
+          userId: user?.id
+        })
+        setIndividuals(filtered)
+      }
+    } catch (error) {
+      console.error("Failed to filter data:", error)
+    }
+  }
+
+  const handleFavorite = async (speciesId?: string, individualId?: string) => {
+    if (!user) return
+    
+    try {
+      await DragonService.toggleFavorite(user.id, speciesId, individualId)
+      // Reload data to update favorite status
+      if (activeTab === "species") {
+        filterData()
+      } else {
+        filterData()
+      }
+    } catch (error) {
+      console.error("Failed to toggle favorite:", error)
+    }
+  }
+
+  const getCurrentItems = () => {
+    const items = activeTab === "species" ? species : individuals
+    const startIndex = currentPage * itemsPerPage
+    return items.slice(startIndex, startIndex + itemsPerPage)
+  }
+
+  const getTotalPages = () => {
+    const items = activeTab === "species" ? species : individuals
+    return Math.ceil(items.length / itemsPerPage)
+  }
+
+  const nextPage = () => {
+    const totalPages = getTotalPages()
+    setCurrentPage((prev) => (prev + 1) % totalPages)
+  }
+
+  const prevPage = () => {
+    const totalPages = getTotalPages()
+    setCurrentPage((prev) => (prev - 1 + totalPages) % totalPages)
   }
 
   const getStatColor = (value: number) => {
@@ -86,15 +122,30 @@ export default function DragonCodexPage() {
 
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
-      case "Legendary":
+      case "legendary":
         return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-      case "Rare":
+      case "rare":
         return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-      case "Common":
+      case "uncommon":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+      case "common":
         return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+      case "mythical":
+        return "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-stone-50 to-amber-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Loading Dragon Codex...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -164,17 +215,12 @@ export default function DragonCodexPage() {
                             <Badge className="bg-amber-500 text-white">{dragon.class}</Badge>
                             <Badge className={getRarityColor(dragon.rarity)}>{dragon.rarity}</Badge>
                           </div>
-                        </div>
+          /* Open Book - Dragon Database */
                       </motion.div>
                     </AnimatePresence>
                   </div>
-                </CardContent>
+            className="space-y-8"
               </Card>
-
-              {/* Right Page - Dragon Details */}
-              <Card className="bg-gradient-to-br from-stone-100 to-amber-50 dark:from-gray-800 dark:to-gray-700 border-2 border-amber-200 dark:border-amber-700 shadow-xl">
-                <CardContent className="p-8">
-                  <AnimatePresence mode="wait">
                     <motion.div
                       key={dragon.id}
                       initial={{ opacity: 0, x: 20 }}
@@ -214,33 +260,51 @@ export default function DragonCodexPage() {
                         <h3 className="text-xl font-bold text-gray-900 dark:text-stone-100 mb-3 font-serif">
                           Combat Stats
                         </h3>
-                        <div className="space-y-3">
-                          {Object.entries(dragon.stats).map(([stat, value]) => (
-                            <div key={stat} className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                {stat.replace(/([A-Z])/g, " $1").trim()}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                  <div
-                                    className={`h-2 rounded-full ${getStatColor(value)}`}
-                                    style={{ width: `${(value / 10) * 100}%` }}
-                                  />
-                                </div>
-                                <span className="text-sm font-bold text-gray-900 dark:text-stone-100 w-6">{value}</span>
-                              </div>
-                            </div>
+            {/* Search and Filters */}
+            <Card className="bg-gradient-to-br from-stone-100 to-amber-50 dark:from-gray-800 dark:to-gray-700 border-2 border-amber-200 dark:border-amber-700 shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search dragons..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 bg-white dark:bg-gray-700 border-amber-200 dark:border-amber-700"
+                    />
+                  </div>
+                  
+                  {activeTab === "species" && (
+                    <>
+                      <Select value={selectedClass} onValueChange={setSelectedClass}>
+                        <SelectTrigger className="w-48 bg-white dark:bg-gray-700 border-amber-200 dark:border-amber-700">
+                          <SelectValue placeholder="All Classes" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">All Classes</SelectItem>
+                          {classes.map((cls) => (
+                            <SelectItem key={cls.id} value={cls.id}>
+                              {cls.name}
+                            </SelectItem>
                           ))}
-                        </div>
-                      </div>
-
-                      {/* Lore */}
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-stone-100 mb-3 font-serif">Lore</h3>
-                        <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">{dragon.lore}</p>
-                      </div>
-                    </motion.div>
-                  </AnimatePresence>
+                        </SelectContent>
+                      </Select>
+                      
+                      <Select value={selectedRarity} onValueChange={setSelectedRarity}>
+                        <SelectTrigger className="w-48 bg-white dark:bg-gray-700 border-amber-200 dark:border-amber-700">
+                          <SelectValue placeholder="All Rarities" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">All Rarities</SelectItem>
+                          <SelectItem value="common">Common</SelectItem>
+                          <SelectItem value="uncommon">Uncommon</SelectItem>
+                          <SelectItem value="rare">Rare</SelectItem>
+                          <SelectItem value="legendary">Legendary</SelectItem>
+                          <SelectItem value="mythical">Mythical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
