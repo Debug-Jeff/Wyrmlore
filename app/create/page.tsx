@@ -2,7 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,9 +14,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit3, ImageIcon, Upload, X, Plus, Eye, Save, Send } from "lucide-react"
 import { motion } from "framer-motion"
+import { useAuth } from "@/contexts/auth-context"
+import { PostService } from "@/lib/posts"
 
 export default function CreatePage() {
+  const { user } = useAuth()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState("post")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const [postData, setPostData] = useState({
     title: "",
     content: "",
@@ -31,6 +38,14 @@ export default function CreatePage() {
   })
   const [newTag, setNewTag] = useState("")
   const [isPreview, setIsPreview] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) {
+      router.push("/auth/login")
+    }
+  }, [user, router])
 
   const postTypes = [
     { value: "discussion", label: "Discussion", color: "bg-blue-500" },
@@ -89,13 +104,64 @@ export default function CreatePage() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      setArtData({ ...artData, file })
+      if (activeTab === "post") {
+        setImageFile(file)
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          setImagePreview(e.target?.result as string)
+        }
+        reader.readAsDataURL(file)
+      } else {
+        setArtData({ ...artData, file })
+      }
     }
   }
 
   const handleSubmit = async (isDraft = false) => {
-    // Handle form submission
-    console.log("Submitting:", activeTab === "post" ? postData : artData, "Draft:", isDraft)
+    if (!user) return
+    
+    setIsSubmitting(true)
+    setError("")
+    
+    try {
+      if (activeTab === "post") {
+        let imageUrl = ""
+        
+        // Upload image if selected
+        if (imageFile) {
+          imageUrl = await PostService.uploadImage(imageFile, user.id)
+        }
+        
+        await PostService.createPost({
+          title: postData.title,
+          content: postData.content,
+          type: postData.type,
+          tags: postData.tags,
+          authorId: user.id,
+          imageUrl
+        })
+        
+        router.push("/community")
+      } else {
+        // Handle art upload (similar implementation)
+        console.log("Art upload not implemented yet")
+      }
+    } catch (error: any) {
+      setError(error.message || "Failed to create post")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-stone-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -131,6 +197,12 @@ export default function CreatePage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {error && (
+                    <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-md">
+                      {error}
+                    </div>
+                  )}
+
                   {/* Post Type */}
                   <div className="space-y-2">
                     <Label className="text-gray-700 dark:text-gray-300">Post Type</Label>
@@ -163,6 +235,49 @@ export default function CreatePage() {
                       onChange={(e) => setPostData({ ...postData, title: e.target.value })}
                       className="bg-white dark:bg-gray-700 border-amber-200 dark:border-amber-700 focus:border-amber-500"
                     />
+                  </div>
+
+                  {/* Image Upload */}
+                  <div className="space-y-2">
+                    <Label className="text-gray-700 dark:text-gray-300">Image (Optional)</Label>
+                    <div className="space-y-4">
+                      {imagePreview && (
+                        <div className="relative">
+                          <img
+                            src={imagePreview}
+                            alt="Preview"
+                            className="w-full max-w-md rounded-lg object-cover"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setImagePreview(null)
+                              setImageFile(null)
+                            }}
+                            className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      <div className="border-2 border-dashed border-amber-200 dark:border-amber-700 rounded-lg p-6 text-center">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          id="post-image-upload"
+                        />
+                        <label htmlFor="post-image-upload" className="cursor-pointer">
+                          <Upload className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                          <p className="text-gray-600 dark:text-gray-300">
+                            {imagePreview ? "Change image" : "Upload an image"}
+                          </p>
+                        </label>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Content */}
@@ -274,10 +389,10 @@ export default function CreatePage() {
                       <Button
                         onClick={() => handleSubmit(false)}
                         className="bg-amber-500 hover:bg-amber-600 text-white"
-                        disabled={!postData.title.trim() || !postData.content.trim()}
+                        disabled={!postData.title.trim() || !postData.content.trim() || isSubmitting}
                       >
                         <Send className="h-4 w-4 mr-2" />
-                        Publish Post
+                        {isSubmitting ? "Publishing..." : "Publish Post"}
                       </Button>
                     </div>
                   </div>

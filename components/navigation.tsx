@@ -3,23 +3,26 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Home, ScrollText, Palette, BookOpen, Map, User, Menu, X, Moon, Sun, ChevronLeft, ChevronRight } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useTheme } from "next-themes"
 import Link from "next/link"
+import { useAuth } from "@/contexts/auth-context"
 
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const { theme, setTheme } = useTheme()
+  const { user, signOut } = useAuth()
 
   const navItems = [
     { icon: Home, label: "Home", href: "/", badge: null },
     { icon: ScrollText, label: "Scrolls", href: "/community", badge: "12" },
     { icon: Palette, label: "Gallery", href: "/gallery", badge: null },
     { icon: BookOpen, label: "Codex", href: "/dragons", badge: "47" },
-    { icon: Map, label: "Berk Map", href: "/timeline", badge: "Soon" },
-    { icon: User, label: "Profile", href: "/dashboard", badge: null },
+    { icon: Map, label: "Timeline", href: "/timeline", badge: null },
   ]
 
   return (
@@ -118,6 +121,94 @@ export function Navigation() {
 
           {/* Theme Toggle */}
           <div className="mt-auto pt-6 border-t border-amber-200 dark:border-gray-700">
+            {/* User Menu */}
+            {user ? (
+              <div className="mb-4">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className={`w-full h-12 px-4 hover:bg-amber-100 dark:hover:bg-amber-900/20 ${
+                        isCollapsed ? 'justify-center' : 'justify-start'
+                      }`}
+                    >
+                      <Avatar className="w-6 h-6 flex-shrink-0">
+                        <AvatarImage src={user.profile?.avatar_url || "/placeholder.svg"} alt={user.profile?.username || "User"} />
+                        <AvatarFallback className="bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 text-xs">
+                          {(user.profile?.display_name || user.profile?.username || user.email).slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      
+                      <AnimatePresence>
+                        {!isCollapsed && (
+                          <motion.span
+                            initial={{ opacity: 0, width: 0 }}
+                            animate={{ opacity: 1, width: "auto" }}
+                            exit={{ opacity: 0, width: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="text-gray-700 dark:text-gray-300 ml-3 truncate"
+                          >
+                            {user.profile?.display_name || user.profile?.username || "User"}
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard">
+                        <User className="h-4 w-4 mr-2" />
+                        Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/profile">
+                        <User className="h-4 w-4 mr-2" />
+                        Edit Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/create">
+                        <ScrollText className="h-4 w-4 mr-2" />
+                        Create Post
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => signOut()}>
+                      <X className="h-4 w-4 mr-2" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : (
+              <div className="mb-4 space-y-2">
+                <Link href="/auth/login">
+                  <Button
+                    variant="ghost"
+                    className={`w-full h-12 px-4 hover:bg-amber-100 dark:hover:bg-amber-900/20 ${
+                      isCollapsed ? 'justify-center' : 'justify-start'
+                    }`}
+                  >
+                    <User className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                    <AnimatePresence>
+                      {!isCollapsed && (
+                        <motion.span
+                          initial={{ opacity: 0, width: 0 }}
+                          animate={{ opacity: 1, width: "auto" }}
+                          exit={{ opacity: 0, width: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="text-gray-700 dark:text-gray-300 ml-3"
+                        >
+                          Sign In
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </Button>
+                </Link>
+              </div>
+            )}
+
             <Button
               variant="ghost"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

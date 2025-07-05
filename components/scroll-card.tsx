@@ -7,29 +7,23 @@ import { Badge } from "@/components/ui/badge"
 import { MessageSquare, Clock, User, Bookmark, Share2 } from "lucide-react"
 import { motion } from "framer-motion"
 import Image from "next/image"
+import Link from "next/link"
+import { useAuth } from "@/contexts/auth-context"
+import { PostService } from "@/lib/posts"
 import { VotingSystem } from "./voting-system"
 import { CommentSystem } from "./comment-system"
 
-interface Post {
-  id: number
-  title: string
-  content: string
-  author: string
-  timestamp: string
-  votes: number
-  comments: number
-  tags: string[]
-  type: "theory" | "art" | "discussion"
-  image?: string
-}
+import { Post } from "@/lib/posts"
 
 interface ScrollCardProps {
   post: Post
 }
 
 export function ScrollCard({ post }: ScrollCardProps) {
+  const { user } = useAuth()
   const [showComments, setShowComments] = useState(false)
   const [isBookmarked, setIsBookmarked] = useState(false)
+  const [currentPost, setCurrentPost] = useState(post)
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -58,36 +52,20 @@ export function ScrollCard({ post }: ScrollCardProps) {
     console.log("Link copied to clipboard!")
   }
 
-  const mockComments = [
-    {
-      id: 1,
-      author: "BerkWarrior",
-      avatar: "/placeholder.svg",
-      content: "This is a fascinating theory! I never thought about it that way.",
-      timestamp: "1 hour ago",
-      votes: 5,
-      replies: [],
-    },
-    {
-      id: 2,
-      author: "DragonScholar",
-      avatar: "/placeholder.svg",
-      content: "Have you considered the architectural similarities to real-world ancient civilizations?",
-      timestamp: "45 minutes ago",
-      votes: 3,
-      replies: [
-        {
-          id: 3,
-          author: post.author,
-          avatar: "/placeholder.svg",
-          content: "Great point! I actually have some research on that topic I can share.",
-          timestamp: "30 minutes ago",
-          votes: 2,
-          isReply: true,
-        },
-      ],
-    },
-  ]
+  const handleVote = async (postId: number, voteType: "up" | "down" | null) => {
+    if (!user) return
+    
+    try {
+      const result = await PostService.votePost(postId.toString(), user.id, voteType)
+      setCurrentPost({
+        ...currentPost,
+        votes: result.totalVotes,
+        user_vote: result.userVote
+      })
+    } catch (error: any) {
+      console.error("Failed to vote:", error)
+    }
+  }
 
   return (
     <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
@@ -100,27 +78,29 @@ export function ScrollCard({ post }: ScrollCardProps) {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <Badge className={getTypeColor(post.type)}>
-                  {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+                  {currentPost.type.charAt(0).toUpperCase() + currentPost.type.slice(1)}
                 </Badge>
                 <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                   <User className="h-4 w-4 mr-1" />
-                  {post.author}
+                  {currentPost.author.display_name || currentPost.author.username}
                   <Clock className="h-4 w-4 ml-3 mr-1" />
-                  {post.timestamp}
+                  {new Date(currentPost.created_at).toLocaleDateString()}
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-stone-100 mb-3 font-serif hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer transition-colors">
-                {post.title}
-              </h3>
+              <Link href={`/posts/${currentPost.id}`}>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-stone-100 mb-3 font-serif hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer transition-colors">
+                  {currentPost.title}
+                </h3>
+              </Link>
             </div>
           </div>
 
           <div className="flex gap-4">
             <div className="flex-1">
-              <p className="text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">{post.content}</p>
+              <p className="text-gray-600 dark:text-gray-300 mb-4 leading-relaxed line-clamp-3">{currentPost.content}</p>
 
               <div className="flex flex-wrap gap-2 mb-4">
-                {post.tags.map((tag) => (
+                {currentPost.tags?.map((tag) => (
                   <Badge
                     key={tag}
                     variant="outline"
@@ -132,10 +112,10 @@ export function ScrollCard({ post }: ScrollCardProps) {
               </div>
             </div>
 
-            {post.image && (
+            {currentPost.image_url && (
               <div className="flex-shrink-0">
                 <Image
-                  src={post.image || "/placeholder.svg"}
+                  src={currentPost.image_url || "/placeholder.svg"}
                   alt="Post image"
                   width={150}
                   height={100}
@@ -148,11 +128,10 @@ export function ScrollCard({ post }: ScrollCardProps) {
           <div className="flex items-center justify-between pt-4 border-t border-amber-100 dark:border-gray-600">
             <div className="flex items-center gap-4">
               <VotingSystem
-                postId={post.id}
-                initialVotes={post.votes}
-                onVote={(postId, voteType) => {
-                  console.log(`Voted ${voteType} on post ${postId}`)
-                }}
+                postId={parseInt(currentPost.id)}
+                initialVotes={currentPost.votes}
+                initialUserVote={currentPost.user_vote}
+                onVote={handleVote}
               />
 
               <Button
@@ -167,7 +146,7 @@ export function ScrollCard({ post }: ScrollCardProps) {
                 className="h-8 px-3 hover:bg-amber-100 dark:hover:bg-amber-900/20"
               >
                 <MessageSquare className="h-4 w-4 mr-2" />
-                {post.comments}
+                {currentPost.comment_count}
               </Button>
 
               <Button
@@ -192,11 +171,14 @@ export function ScrollCard({ post }: ScrollCardProps) {
             </div>
 
             <Button
-              variant="ghost"
+              variant="ghost" 
               size="sm"
+              asChild
               className="text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20"
             >
-              Read More
+              <Link href={`/posts/${currentPost.id}`}>
+                Read More
+              </Link>
             </Button>
           </div>
 
@@ -208,13 +190,13 @@ export function ScrollCard({ post }: ScrollCardProps) {
               exit={{ opacity: 0, height: 0 }}
               className="mt-6 pt-6 border-t border-amber-100 dark:border-gray-600"
             >
-              <CommentSystem
-                postId={post.id}
-                comments={mockComments}
-                onAddComment={(postId, content, parentId) => {
-                  console.log(`Added comment to post ${postId}:`, content, parentId)
-                }}
-              />
+              <div className="text-center py-4">
+                <Link href={`/posts/${currentPost.id}`}>
+                  <Button className="bg-amber-500 hover:bg-amber-600 text-white">
+                    View Full Discussion
+                  </Button>
+                </Link>
+              </div>
             </motion.div>
           )}
         </CardContent>

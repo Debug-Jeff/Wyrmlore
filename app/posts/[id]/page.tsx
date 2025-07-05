@@ -52,26 +52,38 @@ export default function PostDetailPage() {
     }
   }
 
-  const handleVote = async (postId: number, voteType: "up" | "down" | null) => {
-    if (!user || !post) return
+  const handleVote = async (postId: string, voteType: "up" | "down" | null) => {
+    if (!user) {
+      router.push("/auth/login")
+      return
+    }
 
     try {
-      const result = await PostService.votePost(post.id, user.id, voteType)
-      setPost({ ...post, votes: result.totalVotes, user_vote: result.userVote })
+      const result = await PostService.votePost(postId, user.id, voteType)
+      if (post) {
+        setPost({
+          ...post,
+          votes: result.totalVotes,
+          user_vote: result.userVote
+        })
+      }
     } catch (error: any) {
       console.error("Failed to vote:", error)
     }
   }
 
-  const handleAddComment = async (postId: number, content: string, parentId?: number) => {
-    if (!user) return
+  const handleAddComment = async (postId: string, content: string, parentId?: string) => {
+    if (!user) {
+      router.push("/auth/login")
+      return
+    }
 
     try {
       await CommentService.createComment({
-        postId: post!.id,
+        postId,
         authorId: user.id,
         content,
-        parentId: parentId?.toString()
+        parentId
       })
       loadComments() // Reload comments
     } catch (error: any) {
@@ -157,19 +169,14 @@ export default function PostDetailPage() {
               {/* Post Header */}
               <div className="flex items-start justify-between mb-6">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-3">
                     <Badge className={getTypeColor(post.type)}>
                       {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
                     </Badge>
-                    {post.tags.map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant="outline"
-                        className="text-xs border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300"
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
+                    <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                      <Calendar className="h-4 w-4 mr-1" />
+                      {new Date(post.created_at).toLocaleDateString()}
+                    </div>
                   </div>
                   <h1 className="text-3xl font-bold text-gray-900 dark:text-stone-100 mb-4 font-serif">
                     {post.title}
@@ -177,22 +184,33 @@ export default function PostDetailPage() {
                 </div>
 
                 {/* Action Buttons */}
-                {user && post.author_id === user.id && (
-                  <div className="flex gap-2">
-                    <Link href={`/posts/${post.id}/edit`}>
-                      <Button variant="outline" size="sm">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" className="hover:bg-amber-100 dark:hover:bg-amber-900/20">
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="hover:bg-amber-100 dark:hover:bg-amber-900/20">
+                    <Bookmark className="h-4 w-4" />
+                  </Button>
+                  {user && post.author_id === user.id && (
+                    <>
+                      <Button variant="ghost" size="sm" className="hover:bg-amber-100 dark:hover:bg-amber-900/20">
                         <Edit className="h-4 w-4" />
                       </Button>
-                    </Link>
-                    <Button variant="outline" size="sm" onClick={handleDeletePost}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleDeletePost}
+                        className="hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Author Info */}
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
                 <Avatar className="w-12 h-12">
                   <AvatarImage src={post.author.avatar_url || "/placeholder.svg"} alt={post.author.username || "User"} />
                   <AvatarFallback className="bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300">
@@ -200,15 +218,10 @@ export default function PostDetailPage() {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <Link href={`/users/${post.author_id}`}>
-                    <p className="font-semibold text-gray-900 dark:text-stone-100 hover:text-amber-600 dark:hover:text-amber-400">
-                      {post.author.display_name || post.author.username}
-                    </p>
+                  <Link href={`/users/${post.author_id}`} className="font-semibold text-gray-900 dark:text-stone-100 hover:text-amber-600 dark:hover:text-amber-400">
+                    {post.author.display_name || post.author.username}
                   </Link>
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <Calendar className="h-4 w-4 mr-1" />
-                    {new Date(post.created_at).toLocaleDateString()}
-                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">@{post.author.username}</p>
                 </div>
               </div>
 
@@ -232,28 +245,32 @@ export default function PostDetailPage() {
                 </p>
               </div>
 
-              {/* Post Actions */}
-              <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-4">
-                  <VotingSystem
-                    postId={parseInt(post.id)}
-                    initialVotes={post.votes}
-                    initialUserVote={post.user_vote}
-                    onVote={handleVote}
-                  />
-                  <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                    <User className="h-4 w-4" />
-                    <span className="text-sm">{post.comment_count} comments</span>
-                  </div>
+              {/* Tags */}
+              {post.tags && post.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {post.tags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant="outline"
+                      className="border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 cursor-pointer"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
                 </div>
+              )}
 
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" className="hover:bg-amber-100 dark:hover:bg-amber-900/20">
-                    <Bookmark className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="hover:bg-amber-100 dark:hover:bg-amber-900/20">
-                    <Share2 className="h-4 w-4" />
-                  </Button>
+              {/* Voting and Stats */}
+              <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
+                <VotingSystem
+                  postId={post.id}
+                  initialVotes={post.votes}
+                  initialUserVote={post.user_vote}
+                  onVote={handleVote}
+                />
+
+                <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                  <span>{post.comment_count} comments</span>
                 </div>
               </div>
             </CardContent>
@@ -263,26 +280,8 @@ export default function PostDetailPage() {
         {/* Comments Section */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <CommentSystem
-            postId={parseInt(post.id)}
-            comments={comments.map(comment => ({
-              id: parseInt(comment.id),
-              author: comment.author.display_name || comment.author.username || "Anonymous",
-              avatar: comment.author.avatar_url || "/placeholder.svg",
-              content: comment.content,
-              timestamp: new Date(comment.created_at).toLocaleString(),
-              votes: comment.votes,
-              userVote: comment.user_vote,
-              replies: comment.replies?.map(reply => ({
-                id: parseInt(reply.id),
-                author: reply.author.display_name || reply.author.username || "Anonymous",
-                avatar: reply.author.avatar_url || "/placeholder.svg",
-                content: reply.content,
-                timestamp: new Date(reply.created_at).toLocaleString(),
-                votes: reply.votes,
-                userVote: reply.user_vote,
-                isReply: true
-              })) || []
-            }))}
+            postId={post.id}
+            comments={comments}
             onAddComment={handleAddComment}
           />
         </motion.div>
